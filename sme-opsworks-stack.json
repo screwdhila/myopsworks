@@ -1,0 +1,193 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "OpsWorks stack for SME prep",
+    "Metadata": {
+    },
+    "Parameters": {
+    },
+    "Mappings": {
+      "mySubnets": {
+        "VPC": { "CIDR": "192.168.0.0/16" },
+        "Public1": { "CIDR": "192.168.10.0/24" },
+        "Private1": { "CIDR": "192.168.100.0/24" }
+      }
+    },
+    "Conditions": {
+    },
+    "Resources": {
+      "myVPC": {
+        "Type": "AWS::EC2::VPC",
+        "Properties": {
+          "CidrBlock": {
+            "Fn::FindInMap": [
+              "mySubnets",
+              "VPC",
+              "CIDR"
+            ]
+          }
+        }
+      },
+      "myIGW": {
+        "Type": "AWS::EC2::InternetGateway"
+      },
+      "attachIGWVPC": {
+        "Type": "AWS::EC2::VPCGatewayAttachment",
+        "Properties": {
+          "VpcId": {
+            "Ref": "myVPC"
+          },
+          "InternetGatewayId": {
+            "Ref": "myIGW"
+          }
+        }
+      },
+      "myPublicRT": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+          "VpcId": {
+            "Ref": "myVPC"
+          }
+        }
+      },
+      "myPublicRoute": {
+        "Type": "AWS::EC2::Route",
+        "DependsOn" : "attachIGWVPC" ,
+        "Properties": {
+          "RouteTableId": {
+            "Ref": "myPublicRT"
+          },
+          "GatewayId": {
+            "Ref": "myIGW"
+          },
+          "DestinationCidrBlock": "0.0.0.0/0"
+        }
+      },
+
+      "myPublicSubnet1": {
+        "Type": "AWS::EC2::Subnet",
+        "Properties": {
+          "CidrBlock": {
+            "Fn::FindInMap": [
+              "mySubnets",
+              "Public1",
+              "CIDR"
+            ]
+          },
+          "VpcId": {
+            "Ref": "myVPC"
+          },
+          "AvailabilityZone": {
+            "Fn::Select" : [
+              "0",
+              {
+                "Fn::GetAZs" : { "Ref" : "AWS::Region" }
+              }
+            ]
+          }
+        }
+      },
+      "gluePubRTPubSN1": {
+        "Type": "AWS::EC2::SubnetRouteTableAssociation",
+        "Properties": {
+          "RouteTableId": {
+            "Ref": "myPublicRT"
+          },
+          "SubnetId": {
+            "Ref": "myPublicSubnet1"
+          }
+        }
+      },
+
+      "OWInstanceRole": {
+         "Type": "AWS::IAM::Role",
+         "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "ec2.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies": [ {
+               "PolicyName": "OWInstancePolicy",
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                     "Effect": "Allow",
+                     "Action": "*",
+                     "Resource": "*"
+                  } ]
+               }
+               } ]
+            }
+      },
+      "OWInstanceProfile": {
+         "Type": "AWS::IAM::InstanceProfile",
+         "Properties": {
+            "Path": "/",
+            "Roles": [ {
+               "Ref": "OWInstanceRole"
+            } ]
+         }
+      },
+      "myOWStack" : {
+        "Type" : "AWS::OpsWorks::Stack",
+        "Properties" : {
+          "Name" : {
+            "Fn::Join" : [
+              "_",
+              [
+                { "Ref": "AWS::StackName" },
+                "mySMEOWStack"
+              ]
+            ]
+          },
+          "ConfigurationManager" : "11.10",
+          "DefaultAvailabilityZone" : {
+            "Fn::Select" : [
+              "0",
+              {
+                "Fn::GetAZs" : { "Ref" : "AWS::Region" }
+              }
+            ]
+          },
+          "DefaultOS" : "Amazon Linux 2016.09",
+          "UseCustomCookbooks": "true",
+          "CustomCookbookSource" : {
+            "Type" : "git",
+            "Url" : "git@github.com:screwdhila/myopsworks.git"
+          },
+          "DefaultRootDeviceType" : "Ebs",
+          "DefaultSubnetId" : { "Ref" : "myPublicSubnet1" },
+          "HostnameTheme" : "Legendary_creatures_from_Japan",
+          "ServiceRoleArn": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:iam::",
+                { "Ref": "AWS::AccountId" },
+                ":role/aws-opsworks-service-role" ]
+            ]
+          },
+          "UseOpsworksSecurityGroups" : "true",
+          "VpcId" : { "Ref": "myVPC" }
+        }
+      }
+    },
+    "Outputs": {
+      "VPCId" : {
+        "Description" : "VPC ID",
+        "Value" :  { "Ref" : "myVPC" },
+        "Export" : { "Name" : "myVPC" }
+      },
+      "PublicSubnet" : {
+        "Description" : "The subnet ID to use for public web servers",
+        "Value" :  { "Ref" : "myPublicSubnet1" },
+        "Export" : { "Name" : "PublicSubnet" }
+      }
+    }
+}
