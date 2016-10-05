@@ -146,7 +146,10 @@
               ]
             ]
           },
-          "ConfigurationManager" : "11.10",
+          "ConfigurationManager" : {
+            "Name" : "Chef",
+            "Version" : "11.10"
+          },
           "DefaultAvailabilityZone" : {
             "Fn::Select" : [
               "0",
@@ -155,13 +158,13 @@
               }
             ]
           },
-          "DefaultOS" : "Amazon Linux 2016.09",
+          "DefaultOs" : "Amazon Linux 2016.09",
           "UseCustomCookbooks": "true",
-          "CustomCookbookSource" : {
+          "CustomCookbooksSource" : {
             "Type" : "git",
-            "Url" : "git@github.com:screwdhila/myopsworks.git"
+            "Url" : "https://github.com/screwdhila/myopsworks.git"
           },
-          "DefaultRootDeviceType" : "Ebs",
+          "DefaultRootDeviceType" : "ebs",
           "DefaultSubnetId" : { "Ref" : "myPublicSubnet1" },
           "HostnameTheme" : "Legendary_creatures_from_Japan",
           "ServiceRoleArn": {
@@ -173,21 +176,87 @@
                 ":role/aws-opsworks-service-role" ]
             ]
           },
+          "DefaultInstanceProfileArn" : { "Fn::GetAtt" : [ "OWInstanceProfile", "Arn" ] },
           "UseOpsworksSecurityGroups" : "true",
           "VpcId" : { "Ref": "myVPC" }
+        }
+      }
+      ,
+      "myLayer": {
+        "Type": "AWS::OpsWorks::Layer",
+        "DependsOn": "myApp",
+        "Properties": {
+          "StackId": {"Ref": "myOWStack"},
+          "Type": "nodejs-app",
+  	      "Shortname" : "nodejs-app",
+          "EnableAutoHealing" : "true",
+          "AutoAssignElasticIps" : "false",
+          "AutoAssignPublicIps" : "true",
+          "Name": "MyNodeJSLayer"
+        }
+      },
+      "ELBAttachment" : {
+        "Type" : "AWS::OpsWorks::ElasticLoadBalancerAttachment",
+        "Properties" : {
+          "ElasticLoadBalancerName" : { "Ref" : "ELB" },
+          "LayerId" : { "Ref" : "myLayer" }
+        }
+      },
+      "ELB" : {
+        "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+        "Properties": {
+          "Subnets" : [ { "Ref" : "myPublicSubnet1" } ],
+          "Listeners": [{
+            "LoadBalancerPort": "80",
+            "InstancePort": "80",
+            "Protocol": "HTTP",
+            "InstanceProtocol": "HTTP"
+          }],
+          "HealthCheck": {
+            "Target": "HTTP:80/",
+            "HealthyThreshold": "2",
+            "UnhealthyThreshold": "10",
+            "Interval": "30",
+            "Timeout": "5"
+          }
+        }
+      },
+      "myAppInstance1": {
+        "Type": "AWS::OpsWorks::Instance",
+        "Properties": {
+          "StackId": {"Ref": "myOWStack"},
+          "LayerIds": [{"Ref": "myLayer"}],
+          "InstanceType": "t2.medium",
+          "AvailabilityZone" : {
+            "Fn::Select" : [
+              "0",
+              {
+                "Fn::GetAZs" : { "Ref" : "AWS::Region" }
+              }
+            ]
+          }
+        }
+      },
+      "myApp" : {
+        "Type" : "AWS::OpsWorks::App",
+        "Properties" : {
+          "StackId" : {"Ref":"myOWStack"},
+          "Type" : "nodejs",
+          "Name" : "myapp"
         }
       }
     },
     "Outputs": {
       "VPCId" : {
         "Description" : "VPC ID",
-        "Value" :  { "Ref" : "myVPC" },
-        "Export" : { "Name" : "myVPC" }
+        "Value" :  { "Ref" : "myVPC" }
       },
       "PublicSubnet" : {
         "Description" : "The subnet ID to use for public web servers",
-        "Value" :  { "Ref" : "myPublicSubnet1" },
-        "Export" : { "Name" : "PublicSubnet" }
+        "Value" :  { "Ref" : "myPublicSubnet1" }
+      },
+      "ELB" : {
+        "Value" : { "Fn::GetAtt" : [ "ELB", "DNSName" ] }
       }
     }
 }
