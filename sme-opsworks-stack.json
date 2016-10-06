@@ -24,7 +24,9 @@
               "VPC",
               "CIDR"
             ]
-          }
+          },
+          "EnableDnsHostnames" : "true",
+          "EnableDnsSupport" : "true"
         }
       },
       "myIGW": {
@@ -160,6 +162,7 @@
           },
           "DefaultOs" : "Amazon Linux 2016.09",
           "UseCustomCookbooks": "true",
+          "DefaultSshKeyName" : "maruf-default",
           "CustomCookbooksSource" : {
             "Type" : "git",
             "Url" : "https://github.com/screwdhila/myopsworks.git"
@@ -242,7 +245,11 @@
         "Properties" : {
           "StackId" : {"Ref":"myOWStack"},
           "Type" : "nodejs",
-          "Name" : "myapp"
+          "Name" : "myapp",
+          "AppSource" : {
+            "Type" : "git",
+            "Url" : "https://github.com/screwdhila/myopsworks.git"
+          }
         }
       }
     },
